@@ -286,8 +286,8 @@ export default function TabBar() {
                 Don't Save
               </button>
               <button
-                onClick={() => {
-                  const saved = saveRequestById(confirmCloseTabId);
+                onClick={async () => {
+                  const saved = await saveRequestById(confirmCloseTabId);
                   if (saved) {
                     closeTab(confirmCloseTabId);
                     setConfirmCloseTabId(null);

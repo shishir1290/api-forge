@@ -454,6 +454,7 @@ export default function RequestEditor({ tabId }: Props) {
     setEnvironmentVariable,
     markTabSaved,
     updateRequestInCollection,
+    saveRequestById,
     tabs,
     activeTabId,
     setActiveTab,
@@ -494,6 +495,80 @@ export default function RequestEditor({ tabId }: Props) {
 
   const update = (updates: Partial<RequestConfig>) =>
     updateRequest(tabId, updates);
+
+  // ─── Query Param Sync ──────────────────────────────────────────────────────
+  const skipSyncRef = useRef(false);
+
+  // URL -> Params Sync
+  useEffect(() => {
+    if (skipSyncRef.current) {
+      skipSyncRef.current = false;
+      return;
+    }
+
+    if (!request.url) return;
+
+    try {
+      const urlPart = request.url.split("?")[1];
+      if (urlPart === undefined) {
+        return;
+      }
+
+      const searchParams = new URLSearchParams(urlPart);
+      const newParams: KeyValuePair[] = [];
+      searchParams.forEach((value, key) => {
+        const existing = request.params.find((p) => p.key === key);
+        newParams.push({
+          id: existing?.id || uuidv4(),
+          key,
+          value,
+          description: existing?.description || "",
+          enabled: existing?.enabled ?? true,
+        });
+      });
+
+      const paramsChanged =
+        newParams.length !== request.params.length ||
+        newParams.some(
+          (p, i) =>
+            p.key !== request.params[i]?.key ||
+            p.value !== request.params[i]?.value,
+        );
+
+      if (paramsChanged) {
+        skipSyncRef.current = true;
+        update({ params: newParams });
+      }
+    } catch (e) {
+      // Ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request.url]);
+
+  // Params -> URL Sync
+  const handleParamsChange = (newParams: KeyValuePair[]) => {
+    update({ params: newParams });
+
+    const enabledParams = newParams.filter((p) => p.enabled && p.key);
+    const baseUrl = request.url.split("?")[0];
+
+    if (enabledParams.length === 0) {
+      if (request.url !== baseUrl) {
+        skipSyncRef.current = true;
+        update({ url: baseUrl });
+      }
+      return;
+    }
+
+    const searchParams = new URLSearchParams();
+    enabledParams.forEach((p) => searchParams.append(p.key, p.value));
+    const newUrl = `${baseUrl}?${searchParams.toString()}`;
+
+    if (newUrl !== request.url) {
+      skipSyncRef.current = true;
+      update({ url: newUrl });
+    }
+  };
 
   const [paneHeight, setPaneHeight] = useState(400); // Height of the top pane
   const [isResizing, setIsResizing] = useState(false);
@@ -828,18 +903,13 @@ export default function RequestEditor({ tabId }: Props) {
     setEnvironmentVariable,
   ]);
 
-  const handleSave = useCallback(() => {
-    const path = findRequestPath(collections, request.id);
-    if (path.length > 0) {
-      // Direct save: find the collection ID (first item in path)
-      const collectionId = path[0].id;
-      updateRequestInCollection(collectionId, request.id, request);
-      markTabSaved(tabId);
-    } else {
+  const handleSave = useCallback(async () => {
+    const saved = await saveRequestById(tabId);
+    if (!saved) {
       // New request: show modal
       setShowSaveModal(true);
     }
-  }, [collections, request, tabId, updateRequestInCollection, markTabSaved]);
+  }, [tabId, saveRequestById]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1435,7 +1505,7 @@ export default function RequestEditor({ tabId }: Props) {
             {reqTab === "params" && (
               <KeyValueEditor
                 pairs={request.params}
-                onChange={(params) => update({ params })}
+                onChange={handleParamsChange}
                 keyPlaceholder="param_key"
                 valuePlaceholder="param_value"
                 showDescription

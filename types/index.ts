@@ -137,3 +137,14 @@ export interface TeamWorkspace {
   members: TeamMember[];
   createdAt: string;
 }
+
+export interface Invitation {
+  id: string;
+  email: string;
+  role: TeamRole;
+  status: "PENDING" | "ACCEPTED" | "REJECTED";
+  workspaceId: string;
+  workspace: { id: string; name: string };
+  inviter: { id: string; name: string; email: string };
+  createdAt: string;
+}

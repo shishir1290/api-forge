@@ -33,6 +33,8 @@ import {
   CheckCircle2 as CheckCircle,
   HelpCircle,
   SlidersHorizontal,
+  LogOut,
+  User,
 } from "lucide-react";
 import FolderPropertiesModal from "./FolderPropertiesModal";
 import type {
@@ -175,6 +177,7 @@ function RequestRow({
   folderId,
   onOpen,
   onDelete,
+  canEdit,
 }: {
   request: RequestConfig;
   depth: number;
@@ -182,6 +185,7 @@ function RequestRow({
   folderId?: string;
   onOpen: () => void;
   onDelete: () => void;
+  canEdit: boolean;
 }) {
   const [hover, setHover] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -301,6 +305,7 @@ function FolderNode({
   onRenameFolder,
   onDeleteRequest,
   onOpenProperties,
+  canEdit,
 }: {
   folder: CollectionFolder;
   depth: number;
@@ -312,6 +317,7 @@ function FolderNode({
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteRequest: (requestId: string) => void;
   onOpenProperties: (collectionId: string, folderId: string) => void;
+  canEdit: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [hover, setHover] = useState(false);
@@ -323,6 +329,7 @@ function FolderNode({
   const handleCtx = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!canEdit) return;
     setCtxMenu({
       x: e.clientX,
       y: e.clientY,
@@ -442,7 +449,7 @@ function FolderNode({
               )}
             </>
           )}
-          {hover && !renaming && (
+          {hover && !renaming && canEdit && (
             <div style={{ display: "flex", gap: 1, flexShrink: 0 }}>
               <button
                 onClick={(e) => {
@@ -520,6 +527,7 @@ function FolderNode({
                 onRenameFolder={onRenameFolder}
                 onDeleteRequest={onDeleteRequest}
                 onOpenProperties={onOpenProperties}
+                canEdit={canEdit}
               />
             ))}
             {/* Requests */}
@@ -532,6 +540,7 @@ function FolderNode({
                   folderId={folder.id}
                   onOpen={() => onOpenRequest(req)}
                   onDelete={() => onDeleteRequest(req.id)}
+                  canEdit={canEdit}
                 />
                 {req.examples && req.examples.length > 0 && (
                   <div style={{ paddingLeft: (depth + 2) * 16 }}>
@@ -592,11 +601,13 @@ function CollectionNode({
   onOpen,
   onExport,
   onOpenProperties,
+  canEdit,
 }: {
   collection: Collection;
   onOpen: (r: RequestConfig) => void;
   onExport: (c: Collection) => void;
   onOpenProperties: (collectionId: string, folderId?: string) => void;
+  canEdit: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [hover, setHover] = useState(false);
@@ -649,6 +660,7 @@ function CollectionNode({
   const handleCtx = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!canEdit) return;
     setCtxMenu({
       x: e.clientX,
       y: e.clientY,
@@ -759,7 +771,7 @@ function CollectionNode({
               )}
             </>
           )}
-          {hover && !renaming && (
+          {hover && !renaming && canEdit && (
             <div style={{ display: "flex", gap: 1, flexShrink: 0 }}>
               <button
                 onClick={(e) => {
@@ -841,6 +853,7 @@ function CollectionNode({
                   deleteRequestFromCollection(collection.id, rid)
                 }
                 onOpenProperties={onOpenProperties}
+                canEdit={canEdit}
               />
             ))}
             {/* Root-level requests */}
@@ -854,6 +867,7 @@ function CollectionNode({
                   onDelete={() =>
                     deleteRequestFromCollection(collection.id, req.id)
                   }
+                  canEdit={canEdit}
                 />
                 {req.examples && req.examples.length > 0 && (
                   <div style={{ paddingLeft: 32 }}>
@@ -940,7 +954,16 @@ export default function Sidebar() {
     deleteEnvironment,
     openTab,
     importFullCollections,
+    user,
+    logout,
+    workspace,
   } = useAppStore();
+
+  const currentUserMember = workspace?.members.find(
+    (m) => String(m.id) === String(user?.id),
+  );
+  const role = currentUserMember?.role;
+  const canEdit = role !== "viewer";
 
   const handleAddCollection = () => {
     if (!newCollectionName.trim()) return;
@@ -1244,6 +1267,7 @@ export default function Sidebar() {
                     setPropFolderId(folderId);
                     setPropModalOpen(true);
                   }}
+                  canEdit={canEdit}
                 />
               ))
             )}
@@ -1487,23 +1511,25 @@ export default function Sidebar() {
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button
-                  onClick={() => setShowNewEnv(true)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "var(--text-primary)",
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    padding: 0,
-                  }}
-                >
-                  <Plus size={18} /> New
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => setShowNewEnv(true)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "var(--text-primary)",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      padding: 0,
+                    }}
+                  >
+                    <Plus size={18} /> New
+                  </button>
+                )}
               </div>
               <div
                 style={{
@@ -1654,6 +1680,82 @@ export default function Sidebar() {
 
         {/* ── Team tab ── */}
         {activeTab === "team" && <TeamPanel />}
+      </div>
+
+      <div
+        style={{
+          padding: "12px 16px",
+          borderTop: "1px solid var(--border-subtle)",
+          background: "var(--bg-secondary)",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            background: "var(--accent-blue)",
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 14,
+            fontWeight: 600,
+          }}
+        >
+          {user?.name?.charAt(0).toUpperCase() || "U"}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {user?.name || "User"}
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {user?.email || ""}
+          </div>
+        </div>
+        <button
+          onClick={logout}
+          title="Logout"
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: "var(--text-muted)",
+            padding: 6,
+            display: "flex",
+            borderRadius: 4,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--bg-hover)";
+            e.currentTarget.style.color = "var(--accent-red)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "none";
+            e.currentTarget.style.color = "var(--text-muted)";
+          }}
+        >
+          <LogOut size={16} />
+        </button>
       </div>
 
       {showImportModal && (

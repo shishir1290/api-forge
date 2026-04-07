@@ -13,6 +13,7 @@ import type {
   TeamMember,
   TeamWorkspace,
   TeamRole,
+  Invitation,
 } from "@/types";
 import { findRequestPath } from "@/lib/hierarchy-utils";
 
@@ -106,7 +107,8 @@ interface AppState {
   addCollection: (name: string, description?: string) => void;
   importFullCollections: (collections: Collection[]) => void;
   updateCollection: (id: string, updates: Partial<Collection>) => void;
-  deleteCollection: (id: string) => void;
+  deleteCollection: (id: string) => Promise<void>;
+  fetchCollections: (workspaceId: string) => Promise<void>;
 
   // Root-level requests in collection
   addRequestToCollection: (
@@ -170,7 +172,7 @@ interface AppState {
   setRequest: (tabId: string, request: RequestConfig) => void;
   updateRequest: (tabId: string, updates: Partial<RequestConfig>) => void;
   markTabSaved: (tabId: string) => void;
-  saveRequestById: (tabId: string) => boolean; // returns true if saved, false if new (needs modal)
+  saveRequestById: (tabId: string) => Promise<boolean>; // returns true if saved, false if new (needs modal)
 
   // Per-tab responses
   responses: Record<string, ResponseData>;
@@ -195,13 +197,37 @@ interface AppState {
   clearHistory: () => void;
 
   // Team / Workspace
+  workspaces: TeamWorkspace[];
+  fetchWorkspaces: () => Promise<void>;
   workspace: TeamWorkspace;
-  inviteMember: (name: string, email: string, role: TeamRole) => void;
-  updateMemberRole: (memberId: string, role: TeamRole) => void;
-  removeMember: (memberId: string) => void;
+  setActiveWorkspace: (id: string) => void;
+  addWorkspace: (name: string) => Promise<void>; // Team
+  inviteMember: (
+    email: string,
+    role: TeamRole,
+  ) => Promise<{ success: boolean; error?: string }>;
+  updateMemberRole: (memberId: string, role: TeamRole) => Promise<void>;
+  removeMember: (memberId: string) => Promise<void>;
+
+  // Invitations & Notifications
+  invitations: Invitation[];
+  fetchInvitations: () => Promise<void>;
+  respondToInvitation: (
+    id: string,
+    action: "ACCEPT" | "REJECT",
+  ) => Promise<void>;
   updateWorkspace: (
     updates: Partial<Pick<TeamWorkspace, "name" | "description">>,
   ) => void;
+  // Sync
+  processRemoteUpdate: (data: { type: string; payload: any }) => void;
+  syncCollectionsToBackend: () => Promise<void>;
+
+  // Auth
+  user: { id: string; name: string; email: string } | null;
+  token: string | null;
+  setAuth: (user: any, token: string, workspaces?: any[]) => void;
+  logout: () => void;
 }
 
 // ─── Store implementation ─────────────────────────────────────────────────────
@@ -225,22 +251,238 @@ export const useAppStore = create<AppState>()(
       ],
       activeEnvironmentId: null,
       history: [],
+      workspaces: [],
       workspace: {
         id: uuidv4(),
         name: "My Workspace",
         description: "",
-        members: [
-          {
-            id: uuidv4(),
-            name: "You",
-            email: "me@example.com",
-            role: "owner",
-            avatar: "#58a6ff",
-            joinedAt: new Date().toISOString(),
-            status: "active",
-          },
-        ],
+        members: [],
         createdAt: new Date().toISOString(),
+      },
+
+      // Auth
+      user: null,
+      token: null,
+      response: null,
+      error: null,
+
+      // Invitations
+      invitations: [],
+      setAuth: (user, token, workspaces) => {
+        const mappedWorkspaces = Array.isArray(workspaces)
+          ? workspaces.map((w: any) => ({
+              id: w.id,
+              name: w.name,
+              description: w.description || "",
+              createdAt: w.createdAt,
+              members: (w.members || []).map((m: any) => ({
+                id: m.userId,
+                name: m.user.name || "Unknown",
+                email: m.user.email || "",
+                role: m.role.toLowerCase() as TeamRole,
+                avatar: "#58a6ff",
+                joinedAt: m.createdAt || new Date().toISOString(),
+                status: "active",
+              })),
+            }))
+          : [];
+
+        set({
+          user,
+          token,
+          workspaces: mappedWorkspaces,
+          workspace: mappedWorkspaces[0] || get().workspace,
+        });
+
+        if (mappedWorkspaces[0]) {
+          get().fetchCollections(mappedWorkspaces[0].id);
+        }
+      },
+      setActiveWorkspace: (id) => {
+        const { workspaces } = get();
+        const ws = workspaces.find((w) => w.id === id);
+        if (ws) {
+          set({ workspace: ws });
+          get().fetchCollections(id);
+        }
+      },
+
+      fetchWorkspaces: async () => {
+        const { token } = get();
+        if (!token) return;
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+          const res = await fetch(`${BACKEND_URL}/api/workspaces`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const { workspaces } = await res.json();
+            const mappedWorkspaces = workspaces.map((w: any) => ({
+              ...w,
+              members: w.members.map((m: any) => ({
+                id: m.user.id,
+                name: m.user.name || "Unknown",
+                email: m.user.email,
+                role: m.role.toLowerCase() as TeamRole,
+                avatar: m.user.image || "",
+                joinedAt: m.createdAt,
+                status: "active",
+              })),
+            }));
+            set({ workspaces: mappedWorkspaces });
+          }
+        } catch (e) {
+          console.error("Fetch workspaces error:", e);
+        }
+      },
+
+      addWorkspace: async (name) => {
+        const { token } = get();
+        if (!token) return;
+
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+          const res = await fetch(`${BACKEND_URL}/api/workspaces`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ name }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            const w = data.workspace;
+            const mappedWs = {
+              id: w.id,
+              name: w.name,
+              description: w.description || "",
+              createdAt: w.createdAt,
+              members: (w.members || []).map((m: any) => ({
+                id: m.userId,
+                name: m.user?.name || "Unknown",
+                email: m.user?.email || "",
+                role: m.role.toLowerCase() as TeamRole,
+                avatar: "#58a6ff",
+                joinedAt: m.createdAt || new Date().toISOString(),
+                status: "active",
+              })),
+            };
+            set((s) => ({
+              workspaces: [...s.workspaces, mappedWs],
+              workspace: mappedWs,
+            }));
+            get().fetchCollections(w.id);
+          }
+        } catch (e) {
+          console.error("Failed to create workspace:", e);
+        }
+      },
+      fetchCollections: async (workspaceId) => {
+        const { token } = get();
+        if (!token) return;
+
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+          const res = await fetch(
+            `${BACKEND_URL}/api/workspaces/${workspaceId}/collections`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            },
+          );
+          if (res.ok) {
+            const { collections, environments } = await res.json();
+            // Recursive map
+            const mapFolder = (f: any): CollectionFolder => ({
+              id: f.id,
+              name: f.name,
+              description: f.description || "",
+              auth: f.auth || { type: "inherit" },
+              headers: f.headers || [],
+              variables: f.variables || [],
+              requests: (f.requests || []).map((r: any) => ({
+                ...r,
+                headers: r.headers || [],
+                params: r.params || [],
+                body: r.body || { type: "none", content: "", formData: [] },
+                auth: r.auth || { type: "inherit" },
+                preRequestScript: r.preRequestScript || "",
+                postRequestScript: r.postRequestScript || "",
+              })),
+              folders: (f.subFolders || []).map(mapFolder),
+            });
+
+            const mappedCollections: Collection[] = collections.map(
+              (c: any) => ({
+                id: c.id,
+                name: c.name,
+                description: c.description || "",
+                auth: c.auth || { type: "inherit" },
+                headers: c.headers || [],
+                variables: c.variables || [],
+                requests: (c.requests || []).map((r: any) => ({
+                  ...r,
+                  headers: r.headers || [],
+                  params: r.params || [],
+                  body: r.body || { type: "none", content: "", formData: [] },
+                  auth: r.auth || { type: "inherit" },
+                  preRequestScript: r.preRequestScript || "",
+                  postRequestScript: r.postRequestScript || "",
+                })),
+                folders: (c.folders || []).map(mapFolder),
+                createdAt: c.createdAt,
+                updatedAt: c.updatedAt,
+              }),
+            );
+
+            const mappedEnvironments: Environment[] = (environments || []).map(
+              (e: any) => ({
+                id: e.id,
+                name: e.name,
+                variables: (e.variables || []).map((v: any) => ({
+                  ...v,
+                  id: v.id || uuidv4(),
+                })),
+                secrets: (e.secrets || []).map((s: any) => ({
+                  ...s,
+                  id: s.id || uuidv4(),
+                })),
+              }),
+            );
+
+            const globalEnv = get().environments.find((e) => e.id === "global");
+            const finalEnvs = globalEnv
+              ? [
+                  globalEnv,
+                  ...mappedEnvironments.filter((e) => e.id !== "global"),
+                ]
+              : mappedEnvironments;
+
+            set({
+              collections: mappedCollections,
+              environments: finalEnvs,
+              activeEnvironmentId: finalEnvs[0]?.id || null,
+            });
+          }
+        } catch (e) {
+          console.error("Failed to fetch collections:", e);
+        }
+      },
+      logout: () => {
+        set({
+          user: null,
+          token: null,
+          tabs: [],
+          activeTabId: null,
+          requests: {},
+          responses: {},
+        });
+        localStorage.removeItem("app-store"); // Clear persisted state
+        window.location.href = "/login";
       },
 
       // ── Collections ──
@@ -272,8 +514,43 @@ export const useAppStore = create<AppState>()(
           ),
         })),
 
-      deleteCollection: (id) =>
-        set((s) => ({ collections: s.collections.filter((c) => c.id !== id) })),
+      deleteCollection: async (id) => {
+        const { token } = get();
+        if (!token) return;
+
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+          const res = await fetch(`${BACKEND_URL}/api/collections/${id}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (res.ok) {
+            const collection = get().collections.find((c) => c.id === id);
+            const requestIds = new Set<string>();
+            if (collection) {
+              collection.requests.forEach((r) => requestIds.add(r.id));
+              const addReqIds = (folders: CollectionFolder[]) => {
+                folders.forEach((f) => {
+                  f.requests.forEach((r) => requestIds.add(r.id));
+                  addReqIds(f.folders);
+                });
+              };
+              addReqIds(collection.folders);
+            }
+
+            set((s) => ({
+              collections: s.collections.filter((c) => c.id !== id),
+              tabs: s.tabs.filter((t) => !requestIds.has(t.requestId)),
+            }));
+          }
+        } catch (e) {
+          console.error("Failed to delete collection:", e);
+        }
+      },
 
       // ── Root requests ──
       addRequestToCollection: (collectionId, request) =>
@@ -518,12 +795,13 @@ export const useAppStore = create<AppState>()(
           ),
         })),
 
-      saveRequestById: (tabId) => {
+      saveRequestById: async (tabId) => {
         const {
           requests,
           collections,
           updateRequestInCollection,
           markTabSaved,
+          workspace,
         } = get();
         const request = requests[tabId];
         if (!request) return false;
@@ -531,8 +809,35 @@ export const useAppStore = create<AppState>()(
         const path = findRequestPath(collections, request.id);
         if (path.length > 0) {
           const collectionId = path[0].id;
+
+          // Local update
           updateRequestInCollection(collectionId, request.id, request);
           markTabSaved(tabId);
+
+          // Backend sync (Async)
+          try {
+            const { token } = get();
+            const BACKEND_URL =
+              process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+            const res = await fetch(
+              `${BACKEND_URL}/api/requests/${request.id}`,
+              {
+                method: "PUT",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify(request),
+              },
+            );
+
+            if (res.ok) {
+              console.log("Synced with backend");
+            }
+          } catch (e) {
+            console.error("Failed to sync with backend:", e);
+          }
+
           return true;
         }
         return false;
@@ -613,54 +918,242 @@ export const useAppStore = create<AppState>()(
       clearHistory: () => set({ history: [] }),
 
       // ── Team ──
-      inviteMember: (name, email, role) => {
-        const AVATAR_COLORS = [
-          "#58a6ff",
-          "#bc8cff",
-          "#3fb950",
-          "#f0883e",
-          "#ff7b72",
-          "#ffa657",
-          "#79c0ff",
-        ];
-        const member: TeamMember = {
-          id: uuidv4(),
-          name,
-          email,
-          role,
-          avatar:
-            AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
-          joinedAt: new Date().toISOString(),
-          status: "pending",
-        };
-        set((s) => ({
-          workspace: {
-            ...s.workspace,
-            members: [...s.workspace.members, member],
-          },
-        }));
+      inviteMember: async (email, role) => {
+        const { token, workspace } = get();
+        if (!token || !workspace)
+          return { success: false, error: "Not authenticated" };
+
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+          const res = await fetch(
+            `${BACKEND_URL}/api/workspaces/${workspace.id}/invite`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ email, role }),
+            },
+          );
+
+          if (res.ok) {
+            return { success: true };
+          } else {
+            const data = await res.json();
+            return { success: false, error: data.error || "Failed to invite" };
+          }
+        } catch (e) {
+          console.error("Invite error:", e);
+          return { success: false, error: "Network error" };
+        }
       },
 
-      updateMemberRole: (memberId, role) =>
-        set((s) => ({
-          workspace: {
-            ...s.workspace,
-            members: s.workspace.members.map((m) =>
-              m.id === memberId ? { ...m, role } : m,
-            ),
-          },
-        })),
+      fetchInvitations: async () => {
+        const { token } = get();
+        if (!token) return;
 
-      removeMember: (memberId) =>
-        set((s) => ({
-          workspace: {
-            ...s.workspace,
-            members: s.workspace.members.filter((m) => m.id !== memberId),
-          },
-        })),
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+          const res = await fetch(
+            `${BACKEND_URL}/api/notifications/invitations`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            },
+          );
+          if (res.ok) {
+            const { invitations } = await res.json();
+            set({ invitations });
+          }
+        } catch (e) {
+          console.error("Fetch invitations error:", e);
+        }
+      },
+
+      respondToInvitation: async (id, action) => {
+        const { token, fetchInvitations, fetchWorkspaces } = get();
+        if (!token) return;
+
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+          const res = await fetch(
+            `${BACKEND_URL}/api/notifications/invitations/${id}/respond`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ action }),
+            },
+          );
+          if (res.ok) {
+            await fetchInvitations();
+            if (action === "ACCEPT") {
+              await fetchWorkspaces();
+            }
+          }
+        } catch (e) {
+          console.error("Respond invitation error:", e);
+        }
+      },
+
+      updateMemberRole: async (memberId, role) => {
+        const { token, workspace, fetchWorkspaces } = get();
+        if (!token || !workspace) return;
+
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+          const res = await fetch(
+            `${BACKEND_URL}/api/workspaces/${workspace.id}/members/${memberId}/role`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ role }),
+            },
+          );
+
+          if (res.ok) {
+            await fetchWorkspaces();
+          }
+        } catch (e) {
+          console.error("Update role error:", e);
+        }
+      },
+
+      removeMember: async (memberId) => {
+        const { token, workspace, fetchWorkspaces } = get();
+        if (!token || !workspace) return;
+
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+          const res = await fetch(
+            `${BACKEND_URL}/api/workspaces/${workspace.id}/members/${memberId}`,
+            {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          );
+
+          if (res.ok) {
+            await fetchWorkspaces();
+          }
+        } catch (e) {
+          console.error("Remove member error:", e);
+        }
+      },
 
       updateWorkspace: (updates) =>
         set((s) => ({ workspace: { ...s.workspace, ...updates } })),
+
+      // ── Sync ──
+      processRemoteUpdate: (data) => {
+        const { type, payload } = data;
+        const { collections } = get();
+
+        if (type === "COLLECTION_CREATED") {
+          const collection = payload;
+          if (!collections.find((c) => c.id === collection.id)) {
+            set((s) => ({ collections: [...s.collections, collection] }));
+          }
+        } else if (type === "COLLECTION_DELETED") {
+          const { id } = payload;
+          const collection = collections.find((c) => c.id === id);
+          const requestIds = new Set<string>();
+          if (collection) {
+            collection.requests.forEach((r) => requestIds.add(r.id));
+            const addReqIds = (folders: CollectionFolder[]) => {
+              folders.forEach((f) => {
+                f.requests.forEach((r) => requestIds.add(r.id));
+                addReqIds(f.folders);
+              });
+            };
+            addReqIds(collection.folders);
+          }
+
+          set((s) => ({
+            collections: s.collections.filter((c) => c.id !== id),
+            tabs: s.tabs.filter((t) => !requestIds.has(t.requestId)),
+          }));
+        } else if (type === "REQUEST_UPDATED" || type === "REQUEST_CREATED") {
+          const request = payload;
+          // Find if it exists and update
+          const path = findRequestPath(collections, request.id);
+          if (path.length > 0) {
+            const collectionId = path[0].id;
+            set((s) => ({
+              collections: s.collections.map((c) =>
+                c.id === collectionId
+                  ? {
+                      ...c,
+                      requests: c.requests.map((r) =>
+                        r.id === request.id ? { ...r, ...request } : r,
+                      ),
+                      folders: updateRequestInFolders(
+                        c.folders,
+                        request.id,
+                        request,
+                      ),
+                      updatedAt: new Date().toISOString(),
+                    }
+                  : c,
+              ),
+              // Also update any open tabs for this request
+              requests: Object.fromEntries(
+                Object.entries(s.requests).map(([tabId, req]) => [
+                  tabId,
+                  req.id === request.id ? { ...req, ...request } : req,
+                ]),
+              ),
+              tabs: s.tabs.map((t) =>
+                t.requestId === request.id
+                  ? { ...t, name: request.name, isDirty: false } // Reset dirty state since it matches server
+                  : t,
+              ),
+            }));
+          }
+        }
+      },
+
+      syncCollectionsToBackend: async () => {
+        const { collections, environments, workspace, token } = get();
+        if (!token) return;
+
+        try {
+          const BACKEND_URL =
+            process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
+          const res = await fetch(
+            `${BACKEND_URL}/api/workspaces/${workspace.id}/sync`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                collections,
+                environments: environments.filter((e) => e.id !== "global"),
+                workspaceName: workspace.name,
+              }),
+            },
+          );
+          if (res.ok) {
+            console.log("Collections synced to backend");
+          }
+        } catch (e) {
+          console.error("Failed to sync collections:", e);
+        }
+      },
 
       // ── Examples ──
       addExampleToRequest: (requestId, example) => {
@@ -755,6 +1248,9 @@ export const useAppStore = create<AppState>()(
         history: s.history,
         activeEnvironmentId: s.activeEnvironmentId,
         workspace: s.workspace,
+        user: s.user,
+        token: s.token,
+        workspaces: s.workspaces,
       }),
     },
   ),
