@@ -1117,10 +1117,52 @@ export const useAppStore = create<AppState>()(
               ),
               tabs: s.tabs.map((t) =>
                 t.requestId === request.id
-                  ? { ...t, name: request.name, isDirty: false } // Reset dirty state since it matches server
+                  ? { ...t, name: request.name, isDirty: false }
                   : t,
               ),
             }));
+          } else if (type === "REQUEST_CREATED") {
+            // New request from someone else
+            const { collectionId, folderId } = request;
+            set((s) => ({
+              collections: s.collections.map((c) => {
+                // If it belongs to this collection root
+                if (collectionId && c.id === collectionId) {
+                  if (c.requests.find((r) => r.id === request.id)) return c;
+                  return {
+                    ...c,
+                    requests: [...c.requests, request],
+                    updatedAt: new Date().toISOString(),
+                  };
+                }
+                // If it's in a folder, we need to search this collection's folders
+                if (folderId) {
+                  // Check if already exists to avoid duplicates
+                  const path = findRequestPath([c], request.id);
+                  if (path.length > 0) return c;
+
+                  return {
+                    ...c,
+                    folders: addRequestToFolders(c.folders, folderId, request),
+                    updatedAt: new Date().toISOString(),
+                  };
+                }
+                return c;
+              }),
+            }));
+          }
+        } else if (
+          type === "MEMBER_JOINED" ||
+          type === "MEMBER_REMOVED" ||
+          type === "MEMBER_UPDATED"
+        ) {
+          // Refresh workspace and member list
+          get().fetchWorkspaces();
+        } else if (type === "FULL_SYNC_COMPLETE") {
+          // Refresh collections and environments
+          const { workspace } = get();
+          if (workspace?.id) {
+            get().fetchCollections(workspace.id);
           }
         }
       },
