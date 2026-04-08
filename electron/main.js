@@ -57,7 +57,8 @@ function createWindow() {
   } else {
     // Load the exported static Next.js app via custom protocol
     // Loading app://static/ (without index.html) allows Next.js to handle the root correctly
-    mainWindow.loadURL("app://static/");
+    // mainWindow.loadURL("app://static/");
+    mainWindow.loadURL("app://static/index.html");
   }
 
   // Native menu
