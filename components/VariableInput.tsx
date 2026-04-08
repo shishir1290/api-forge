@@ -54,38 +54,46 @@ export default function VariableInput({
       string,
       { key: string; value: string; isSecret: boolean; isGlobal: boolean }
     >();
-    global.forEach((v) =>
-      map.set(v.key, {
-        key: v.key,
-        value: v.currentValue,
-        isSecret: false,
-        isGlobal: true,
-      }),
-    );
-    globalSec.forEach((v) =>
-      map.set(v.key, {
-        key: v.key,
-        value: v.currentValue,
-        isSecret: true,
-        isGlobal: true,
-      }),
-    );
-    active.forEach((v) =>
-      map.set(v.key, {
-        key: v.key,
-        value: v.currentValue,
-        isSecret: false,
-        isGlobal: false,
-      }),
-    );
-    activeSec.forEach((v) =>
-      map.set(v.key, {
-        key: v.key,
-        value: v.currentValue,
-        isSecret: true,
-        isGlobal: false,
-      }),
-    );
+    global
+      .filter((v) => v.enabled)
+      .forEach((v) =>
+        map.set(v.key, {
+          key: v.key,
+          value: v.currentValue,
+          isSecret: false,
+          isGlobal: true,
+        }),
+      );
+    globalSec
+      .filter((v) => v.enabled)
+      .forEach((v) =>
+        map.set(v.key, {
+          key: v.key,
+          value: v.currentValue,
+          isSecret: true,
+          isGlobal: true,
+        }),
+      );
+    active
+      .filter((v) => v.enabled)
+      .forEach((v) =>
+        map.set(v.key, {
+          key: v.key,
+          value: v.currentValue,
+          isSecret: false,
+          isGlobal: false,
+        }),
+      );
+    activeSec
+      .filter((v) => v.enabled)
+      .forEach((v) =>
+        map.set(v.key, {
+          key: v.key,
+          value: v.currentValue,
+          isSecret: true,
+          isGlobal: false,
+        }),
+      );
     extraVariables.forEach((v) =>
       map.set(v.key, {
         key: v.key,
@@ -194,6 +202,7 @@ export default function VariableInput({
           <span
             key={i}
             title={tooltip}
+            onClick={() => inputRef.current?.focus()}
             style={{
               color: exists ? "var(--accent-green)" : "var(--accent-red)",
               background: exists
@@ -202,7 +211,8 @@ export default function VariableInput({
               borderRadius: 3,
               padding: "0 2px",
               fontWeight: 600,
-              pointerEvents: "none",
+              pointerEvents: "auto",
+              cursor: "text",
             }}
           >
             {part}
@@ -252,7 +262,7 @@ export default function VariableInput({
           inset: 0,
           pointerEvents: "none",
           overflow: "auto",
-          zIndex: 2,
+          zIndex: 4,
           // Hide scrollbar but keep functionality for sync
           scrollbarWidth: "none",
           msOverflowStyle: "none",
@@ -293,7 +303,6 @@ export default function VariableInput({
           value={value}
           onChange={handleInput}
           onScroll={handleScroll}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
           onKeyDown={handleGlobalKeyDown}
           placeholder={placeholder}
           spellCheck={false}
@@ -302,7 +311,7 @@ export default function VariableInput({
           autoCapitalize="none"
           style={{
             position: "relative",
-            zIndex: 3,
+            zIndex: 2,
             width: "100%",
             height: "100%",
             ...typographyStyle,
@@ -312,6 +321,15 @@ export default function VariableInput({
             outline: "none",
             caretColor: "var(--text-primary)", // Keep caret visible
           }}
+          onFocus={(e: React.FocusEvent<HTMLInputElement>) => {
+            if (overlayRef.current)
+              overlayRef.current.style.borderColor = "var(--accent-blue)";
+          }}
+          onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+            if (overlayRef.current)
+              overlayRef.current.style.borderColor = "transparent";
+            setTimeout(() => setShowSuggestions(false), 200);
+          }}
         />
       ) : (
         <textarea
@@ -319,7 +337,6 @@ export default function VariableInput({
           value={value}
           onChange={handleInput}
           onScroll={handleScroll}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
           onKeyDown={(e) => {
             if (e.key === "Tab" && !showSuggestions) {
               e.preventDefault();
@@ -345,7 +362,7 @@ export default function VariableInput({
           autoCapitalize="none"
           style={{
             position: "relative",
-            zIndex: 3,
+            zIndex: 2,
             width: "100%",
             height: "100%",
             ...typographyStyle,
@@ -355,6 +372,15 @@ export default function VariableInput({
             outline: "none",
             resize: "none",
             caretColor: "var(--text-primary)", // Keep caret visible
+          }}
+          onFocus={(e: React.FocusEvent<HTMLTextAreaElement>) => {
+            if (overlayRef.current)
+              overlayRef.current.style.borderColor = "var(--accent-blue)";
+          }}
+          onBlur={(e: React.FocusEvent<HTMLTextAreaElement>) => {
+            if (overlayRef.current)
+              overlayRef.current.style.borderColor = "transparent";
+            setTimeout(() => setShowSuggestions(false), 200);
           }}
         />
       )}

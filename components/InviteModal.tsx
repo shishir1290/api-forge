@@ -1,6 +1,6 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
-import { X, UserPlus, Info } from "lucide-react";
+import { useState } from "react";
+import { X, UserPlus, Mail, Shield, ChevronDown } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { TeamRole } from "@/types";
 
@@ -9,26 +9,18 @@ interface Props {
 }
 
 export default function InviteModal({ onClose }: Props) {
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<TeamRole>("viewer");
-  const [error, setError] = useState<string | null>(null);
-  const [isSending, setIsSending] = useState(false);
   const { inviteMember } = useAppStore();
-  const modalRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (modalRef.current === e.target) onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<TeamRole>("viewer" as TeamRole);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleInvite = async () => {
-    setError(null);
-    setIsSending(true);
+    if (!email) return;
+    setLoading(true);
+    setError("");
     const res = await inviteMember(email, role);
-    setIsSending(false);
+    setLoading(false);
     if (res.success) {
       onClose();
     } else {
@@ -38,191 +30,234 @@ export default function InviteModal({ onClose }: Props) {
 
   return (
     <div
-      ref={modalRef}
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 9999,
-        background: "rgba(0,0,0,0.6)",
+        zIndex: 10000,
+        background: "rgba(0,0,0,0.8)",
+        backdropFilter: "blur(4px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        padding: 20,
       }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         style={{
-          background: "var(--bg-tertiary)",
+          width: "100%",
+          maxWidth: 400,
+          background: "var(--bg-secondary)",
           border: "1px solid var(--border)",
           borderRadius: 12,
-          width: 420,
-          boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
-          padding: 24,
+          boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
           display: "flex",
           flexDirection: "column",
-          gap: 20,
+          animation: "modalFadeIn 0.2s ease-out",
         }}
       >
         <div
           style={{
+            padding: "16px 20px",
+            borderBottom: "1px solid var(--border)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                background: "rgba(88,166,255,0.1)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "var(--accent-blue)",
-              }}
-            >
-              <UserPlus size={20} />
-            </div>
-            <h2
-              style={{
-                fontSize: "16px",
-                fontWeight: 700,
-                margin: 0,
-                color: "var(--text-primary)",
-              }}
-            >
-              Invite Member
-            </h2>
-          </div>
+          <h3
+            style={{
+              margin: 0,
+              fontSize: "15px",
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <UserPlus size={18} style={{ color: "var(--accent-blue)" }} />{" "}
+            Invite Member
+          </h3>
           <button
             onClick={onClose}
             style={{
               background: "none",
               border: "none",
-              cursor: "pointer",
               color: "var(--text-muted)",
-              padding: 4,
+              cursor: "pointer",
             }}
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label
-            style={{
-              fontSize: "12px",
-              fontWeight: 600,
-              color: "var(--text-secondary)",
-            }}
-          >
-            Email Address
-          </label>
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="colleague@example.com"
-            style={{
-              width: "100%",
-              height: 40,
-              background: "var(--bg-active)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              padding: "0 12px",
-              color: "var(--text-primary)",
-              fontSize: "14px",
-              outline: "none",
-            }}
-          />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <label
-            style={{
-              fontSize: "12px",
-              fontWeight: 600,
-              color: "var(--text-secondary)",
-            }}
-          >
-            Role
-          </label>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as TeamRole)}
-            style={{
-              width: "100%",
-              height: 40,
-              background: "var(--bg-active)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              padding: "0 10px",
-              color: "var(--text-primary)",
-              fontSize: "14px",
-              outline: "none",
-            }}
-          >
-            <option value="admin">Admin</option>
-            <option value="editor">Editor</option>
-            <option value="viewer">Viewer</option>
-          </select>
-        </div>
-
-        {error && (
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              padding: "10px 12px",
-              borderRadius: 8,
-              background: "rgba(255,123,114,0.1)",
-              border: "1px solid rgba(255,123,114,0.3)",
-              color: "var(--accent-red)",
-              fontSize: "12px",
-              alignItems: "center",
-            }}
-          >
-            <Info size={14} /> {error}
+        <div
+          style={{
+            padding: 20,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: "12px",
+                color: "var(--text-muted)",
+                marginBottom: 8,
+              }}
+            >
+              Email Address
+            </label>
+            <div style={{ position: "relative" }}>
+              <Mail
+                size={14}
+                style={{
+                  position: "absolute",
+                  left: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "var(--text-muted)",
+                }}
+              />
+              <input
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="colleague@example.com"
+                style={{
+                  width: "100%",
+                  height: 36,
+                  background: "var(--bg-tertiary)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  paddingLeft: 34,
+                  color: "var(--text-primary)",
+                  fontSize: "13px",
+                  outline: "none",
+                }}
+              />
+            </div>
           </div>
-        )}
 
-        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <div>
+            <label
+              style={{
+                display: "block",
+                fontSize: "12px",
+                color: "var(--text-muted)",
+                marginBottom: 8,
+              }}
+            >
+              Workspace Role
+            </label>
+            <div style={{ position: "relative" }}>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as TeamRole)}
+                style={{
+                  width: "100%",
+                  height: 36,
+                  background: "var(--bg-tertiary)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  padding: "0 10px",
+                  color: "var(--text-primary)",
+                  fontSize: "13px",
+                  outline: "none",
+                  appearance: "none",
+                }}
+              >
+                <option value="viewer">Viewer (Read-only)</option>
+                <option value="editor">Editor (Can edit)</option>
+                <option value="admin">Admin (Full control)</option>
+              </select>
+              <ChevronDown
+                size={14}
+                style={{
+                  position: "absolute",
+                  right: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "var(--text-muted)",
+                  pointerEvents: "none",
+                }}
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div
+              style={{
+                fontSize: "12px",
+                color: "var(--accent-red)",
+                background: "rgba(255,100,100,0.1)",
+                padding: "8px 12px",
+                borderRadius: 6,
+              }}
+            >
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            padding: "16px 20px",
+            background: "var(--bg-tertiary)",
+            borderRadius: "0 0 12px 12px",
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+          }}
+        >
           <button
             onClick={onClose}
             style={{
-              flex: 1,
-              height: 42,
-              background: "none",
+              padding: "8px 16px",
+              borderRadius: 6,
               border: "1px solid var(--border)",
-              borderRadius: 8,
+              background: "none",
+              color: "var(--text-primary)",
+              fontSize: "13px",
               cursor: "pointer",
-              color: "var(--text-secondary)",
-              fontSize: "14px",
-              fontWeight: 600,
             }}
           >
             Cancel
           </button>
           <button
             onClick={handleInvite}
-            disabled={!email || isSending}
+            disabled={loading || !email}
             style={{
-              flex: 2,
-              height: 42,
-              background:
-                email && !isSending ? "var(--accent-blue)" : "var(--bg-active)",
+              padding: "8px 24px",
+              borderRadius: 6,
               border: "none",
-              borderRadius: 8,
-              cursor: email && !isSending ? "pointer" : "not-allowed",
-              color: email && !isSending ? "white" : "var(--text-muted)",
-              fontSize: "14px",
-              fontWeight: 700,
+              background: loading ? "var(--border)" : "var(--accent-blue)",
+              color: "white",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: loading ? "default" : "pointer",
             }}
           >
-            {isSending ? "Sending..." : "Send Invitation"}
+            {loading ? "Sending..." : "Send Invitation"}
           </button>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes modalFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }

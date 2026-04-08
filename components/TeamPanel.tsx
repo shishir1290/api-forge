@@ -1,172 +1,205 @@
 "use client";
-import { useState, useEffect } from "react";
-import { Users, UserPlus, RefreshCw } from "lucide-react";
+import {
+  Users,
+  MoreHorizontal,
+  UserPlus,
+  Shield,
+  UserMinus,
+  Mail,
+} from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
-import MemberList from "./MemberList";
-import InviteModal from "./InviteModal";
-import WorkspaceSettings from "./WorkspaceSettings";
-import InvitationList from "./InvitationList";
+import { useState } from "react";
+import { SidebarContextMenu, CtxMenu } from "./SidebarUtils";
+import { TeamMember, TeamRole } from "@/types";
 
-export default function TeamPanel() {
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const { workspace, user, invitations, fetchWorkspaces, fetchInvitations } =
-    useAppStore();
+interface Props {
+  onInvite: () => void;
+}
 
-  useEffect(() => {
-    fetchWorkspaces();
-    fetchInvitations();
-  }, [fetchWorkspaces, fetchInvitations]);
+export default function TeamPanel({ onInvite }: Props) {
+  const { workspace, user, removeMember, updateMemberRole } = useAppStore();
+  const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
 
-  const currentUser = workspace.members.find((m) => m.id === user?.id);
-  const userRole = currentUser?.role || "viewer";
-  const canInvite = userRole === "owner" || userRole === "admin";
+  const currentUserRole =
+    workspace.members.find((m) => m.id === user?.id)?.role || "viewer";
+  const canManage = ["owner", "admin"].includes(currentUserRole);
+
+  const handleCtx = (e: React.MouseEvent, member: TeamMember) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!canManage || member.id === user?.id) return;
+
+    setCtxMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          label: "Promote to Admin",
+          icon: <Shield size={13} />,
+          onClick: () => updateMemberRole(member.id, "admin" as TeamRole),
+        },
+        {
+          label: "Set as Editor",
+          icon: <Users size={13} />,
+          onClick: () => updateMemberRole(member.id, "editor" as TeamRole),
+        },
+        {
+          label: "Set as Viewer",
+          icon: <Users size={13} />,
+          onClick: () => updateMemberRole(member.id, "viewer" as TeamRole),
+        },
+        {
+          label: "Remove Member",
+          icon: <UserMinus size={13} />,
+          danger: true,
+          onClick: () => {
+            if (confirm(`Remove ${member.name} from workspace?`)) {
+              removeMember(member.id);
+            }
+          },
+        },
+      ],
+    });
+  };
 
   return (
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        background: "var(--bg-primary)",
-        overflow: "auto",
-      }}
-    >
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 1 }}>
       <div
         style={{
-          maxWidth: 1000,
-          margin: "0 auto",
-          width: "100%",
-          padding: "40px 24px",
+          padding: "8px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
         }}
       >
-        {/* HEADER */}
-        <div
+        <span
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 32,
+            fontSize: "11px",
+            fontWeight: 700,
+            color: "var(--text-muted)",
+            letterSpacing: "0.05em",
           }}
         >
-          <div>
+          MEMBERS ({workspace.members.length})
+        </span>
+        {canManage && (
+          <button
+            onClick={onInvite}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--accent-blue)",
+              cursor: "pointer",
+              padding: 4,
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: "11px",
+              fontWeight: 600,
+            }}
+          >
+            <UserPlus size={14} /> Invite
+          </button>
+        )}
+      </div>
+
+      <div style={{ padding: "0 8px" }}>
+        {workspace.members.map((member) => (
+          <div
+            key={member.id}
+            onContextMenu={(e) => handleCtx(e, member)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 12px",
+              borderRadius: 8,
+              transition: "background 0.2s",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = "var(--bg-hover)")
+            }
+            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+          >
             <div
               style={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                background: "var(--accent-blue)",
                 display: "flex",
                 alignItems: "center",
-                gap: 12,
-                marginBottom: 8,
+                justifyContent: "center",
+                color: "white",
+                fontSize: "12px",
+                fontWeight: 600,
               }}
             >
+              {member.name[0]}
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    color: "var(--text-primary)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {member.name} {member.id === user?.id && "(You)"}
+                </span>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    padding: "1px 6px",
+                    borderRadius: 10,
+                    background: "var(--bg-active)",
+                    color: "var(--text-muted)",
+                    textTransform: "uppercase",
+                    fontWeight: 700,
+                  }}
+                >
+                  {member.role}
+                </span>
+              </div>
               <div
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  background: "rgba(88,166,255,0.1)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--accent-blue)",
+                  fontSize: "11px",
+                  color: "var(--text-muted)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
                 }}
               >
-                <Users size={24} />
+                {member.email}
               </div>
-              <h1
-                style={{
-                  fontSize: "24px",
-                  fontWeight: 700,
-                  margin: 0,
-                  color: "var(--text-primary)",
-                }}
-              >
-                Team management
-              </h1>
             </div>
-            <p
-              style={{
-                fontSize: "14px",
-                color: "var(--text-muted)",
-                margin: 0,
-              }}
-            >
-              Manage your workspace members, roles, and settings.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => {
-                fetchWorkspaces();
-                fetchInvitations();
-              }}
-              style={{
-                height: 40,
-                padding: "0 14px",
-                background: "var(--bg-active)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                cursor: "pointer",
-                color: "var(--text-secondary)",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <RefreshCw size={16} /> Refresh
-            </button>
-            {canInvite && (
+
+            {canManage && member.id !== user?.id && (
               <button
-                onClick={() => setShowInviteModal(true)}
+                onClick={(e) => handleCtx(e, member)}
                 style={{
-                  height: 40,
-                  padding: "0 20px",
-                  background: "var(--accent-blue)",
-                  color: "white",
+                  background: "none",
                   border: "none",
-                  borderRadius: 8,
                   cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: "14px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
+                  color: "var(--text-muted)",
+                  padding: 4,
+                  opacity: 0.6,
                 }}
               >
-                <UserPlus size={18} /> Invite Member
+                <MoreHorizontal size={14} />
               </button>
             )}
           </div>
-        </div>
-
-        {/* WORKSPACE SETTINGS */}
-        <WorkspaceSettings workspace={workspace} userRole={userRole} />
-
-        {/* MEMBER LIST */}
-        <div style={{ marginTop: 40 }}>
-          <h3
-            style={{
-              fontSize: "14px",
-              fontWeight: 700,
-              margin: "0 0 16px 0",
-              color: "var(--text-primary)",
-            }}
-          >
-            Workspace Members
-          </h3>
-          <MemberList
-            members={workspace.members}
-            currentUserRole={userRole}
-            currentUserId={user?.id || ""}
-          />
-        </div>
-
-        {/* PENDING INVITATIONS */}
-        <InvitationList invitations={invitations} />
+        ))}
       </div>
 
-      {/* MODALS */}
-      {showInviteModal && (
-        <InviteModal onClose={() => setShowInviteModal(false)} />
+      {ctxMenu && (
+        <SidebarContextMenu menu={ctxMenu} onClose={() => setCtxMenu(null)} />
       )}
     </div>
   );

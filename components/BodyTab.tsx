@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import KeyValueEditor from "./KeyValueEditor";
 import { RequestConfig, KeyValuePair } from "@/types";
+import Editor from "@monaco-editor/react";
 
 interface Props {
   body: RequestConfig["body"];
@@ -67,26 +68,40 @@ export default function BodyTab({ body, onChange }: Props) {
 
       <div style={{ flex: 1, overflow: "auto", padding: "12px 16px" }}>
         {body.type === "json" || body.type === "raw" ? (
-          <div style={{ position: "relative", height: "100%" }}>
-            <textarea
+          <div
+            style={{
+              position: "relative",
+              height: "100%",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              overflow: "hidden",
+            }}
+          >
+            <Editor
+              height="100%"
+              language={body.type === "json" ? "json" : "text"}
+              theme="vs-dark"
               value={body.content}
-              onChange={(e) => onChange({ content: e.target.value })}
-              style={{
-                width: "100%",
-                height: "100%",
-                background: "none",
-                border: "none",
-                color: "var(--text-primary)",
-                fontSize: "13px",
+              onChange={(value) => onChange({ content: value || "" })}
+              options={{
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 13,
                 fontFamily: "JetBrains Mono, monospace",
-                outline: "none",
-                resize: "none",
+                renderControlCharacters: true,
+                automaticLayout: true,
+                autoClosingBrackets: "always",
+                autoClosingQuotes: "always",
+                formatOnType: true,
+                formatOnPaste: true,
+                tabSize: 2,
+                wordWrap: "on",
+                lineNumbers: "on",
+                glyphMargin: false,
+                folding: true,
+                lineDecorationsWidth: 10,
+                lineNumbersMinChars: 3,
               }}
-              placeholder={
-                body.type === "json"
-                  ? '{ "key": "value" }'
-                  : "Request body content..."
-              }
             />
             {body.type === "json" && (
               <div

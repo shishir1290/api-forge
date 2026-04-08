@@ -1,118 +1,78 @@
-import { RequestConfig, Environment, KeyValuePair, RequestAuth } from "@/types";
-import { resolveVariables } from "./resolve-vars";
+import { RequestConfig } from "@/types";
 
-/**
- * Generates a cURL command from a RequestConfig object.
- */
-export function generateCurl(
-  request: RequestConfig,
-  environments: Environment[] = [],
-  activeId: string | null = null,
-  extraVariables: KeyValuePair[] = [],
-  inheritedHeaders: KeyValuePair[] = [],
-  inheritedAuth?: RequestAuth,
-): string {
-  const resolve = (text: string) =>
-    resolveVariables(text, environments, activeId, extraVariables);
+export function generateCurl(request: RequestConfig): string {
+  const parts = ["curl"];
 
-  // Use inherited auth if the request is set to inherit
-  const effectiveAuth =
-    request.auth.type === "inherit" && inheritedAuth
-      ? inheritedAuth
-      : request.auth;
+  parts.push(`-X ${request.method}`);
+  parts.push(`"${request.url}"`);
 
-  // Create a deep copy to resolve variables without mutating original
-  const resolvedUrl = resolve(request.url);
-  const { method, headers, body } = request;
-
-  let curl = `curl --location --request ${method} '${resolvedUrl}'`;
-
-  // Headers
-  const allHeaders: KeyValuePair[] = [];
-
-  // 1. Add inherited headers
-  inheritedHeaders.forEach((h) => {
-    if (h.enabled !== false && h.key) {
-      allHeaders.push({ ...h, value: resolve(h.value || "") });
+  request.headers.forEach((h) => {
+    if (h.enabled && h.key) {
+      parts.push(`-H "${h.key}: ${h.value}"`);
     }
   });
 
-  // 2. Add local headers (can override inherited)
-  headers.forEach((h) => {
-    if (h.enabled !== false && h.key) {
-      // Find if this header already exists in allHeaders and update it
-      const existingIdx = allHeaders.findIndex(
-        (ah) => ah.key.toLowerCase() === h.key.toLowerCase(),
-      );
-      if (existingIdx !== -1) {
-        allHeaders[existingIdx] = { ...h, value: resolve(h.value || "") };
-      } else {
-        allHeaders.push({ ...h, value: resolve(h.value || "") });
-      }
-    }
-  });
-
-  // Add Auth headers if applicable
-  if (effectiveAuth.type === "bearer" && effectiveAuth.bearerToken) {
-    const resolvedToken = resolve(effectiveAuth.bearerToken);
-    allHeaders.push({
-      id: "auth",
-      key: "Authorization",
-      value: `Bearer ${resolvedToken}`,
-      enabled: true,
-    });
-  } else if (effectiveAuth.type === "basic") {
-    const user = resolve(effectiveAuth.basicUsername || "");
-    const pass = resolve(effectiveAuth.basicPassword || "");
-    const encoded = btoa(`${user}:${pass}`);
-    allHeaders.push({
-      id: "auth",
-      key: "Authorization",
-      value: `Basic ${encoded}`,
-      enabled: true,
-    });
-  } else if (
-    effectiveAuth.type === "api-key" &&
-    effectiveAuth.apiKeyIn === "header"
-  ) {
-    allHeaders.push({
-      id: "auth",
-      key: resolve(effectiveAuth.apiKeyKey || "X-API-Key"),
-      value: resolve(effectiveAuth.apiKeyValue || ""),
-      enabled: true,
-    });
+  if (request.body.type !== "none" && request.body.content) {
+    // Escape double quotes for shell
+    const escapedBody = request.body.content.replace(/"/g, '\\"');
+    parts.push(`-d "${escapedBody}"`);
   }
 
-  allHeaders
-    .filter((h) => h.enabled !== false && h.key)
-    .forEach((h) => {
-      curl += ` \\\n--header '${h.key}: ${h.value}'`;
-    });
+  // Handle Auth
+  if (request.auth.type === "bearer" && request.auth.bearerToken) {
+    parts.push(`-H "Authorization: Bearer ${request.auth.bearerToken}"`);
+  } else if (request.auth.type === "basic") {
+    const auth = btoa(
+      `${request.auth.basicUsername || ""}:${request.auth.basicPassword || ""}`,
+    );
+    parts.push(`-H "Authorization: Basic ${auth}"`);
+  }
 
-  // Body
-  if (method !== "GET" && method !== "HEAD") {
-    if (body.type === "json" && body.content) {
-      const resolvedBody = resolve(body.content);
-      curl += ` \\\n--header 'Content-Type: application/json'`;
-      curl += ` \\\n--data-raw '${resolvedBody.replace(/'/g, "'\\''")}'`;
-    } else if (body.type === "x-www-form-urlencoded") {
-      curl += ` \\\n--header 'Content-Type: application/x-www-form-urlencoded'`;
-      const formParams = body.formData
-        .filter((p) => p.enabled && p.key)
-        .map((p) => {
-          const resolvedKey = resolve(p.key);
-          const resolvedVal = resolve(p.value || "");
-          return `${encodeURIComponent(resolvedKey)}=${encodeURIComponent(resolvedVal)}`;
-        })
-        .join("&");
-      if (formParams) {
-        curl += ` \\\n--data '${formParams}'`;
-      }
-    } else if (body.type === "raw" && body.content) {
-      const resolvedBody = resolve(body.content);
-      curl += ` \\\n--data-raw '${resolvedBody.replace(/'/g, "'\\''")}'`;
+  return parts.join(" ");
+}
+
+export function parseCurl(curl: string): Partial<RequestConfig> {
+  const config: Partial<RequestConfig> = {
+    method: "GET",
+    url: "",
+    headers: [],
+    params: [],
+    body: { type: "none", content: "", formData: [] },
+    auth: { type: "none" },
+  };
+
+  // Very basic regex-based parser
+  // In a real app, use a library like 'curl-to-json' or 'shell-quote'
+  const methodMatch = curl.match(/-X\s+([A-Z]+)/);
+  if (methodMatch) config.method = methodMatch[1] as any;
+
+  const urlMatch =
+    curl.match(/"(https?:\/\/[^"]+)"/) || curl.match(/'(https?:\/\/[^']+)'/);
+  if (urlMatch) config.url = urlMatch[1];
+
+  const headerMatches = curl.matchAll(/-H\s+["']([^"']+)["']/g);
+  for (const match of headerMatches) {
+    const [key, ...values] = match[1].split(":");
+    if (key && values.length > 0) {
+      config.headers?.push({
+        id: Math.random().toString(36).substr(2, 9),
+        key: key.trim(),
+        value: values.join(":").trim(),
+        enabled: true,
+      });
     }
   }
 
-  return curl;
+  const bodyMatch =
+    curl.match(/-d\s+["']([^"']+)["']/) ||
+    curl.match(/--data\s+["']([^"']+)["']/);
+  if (bodyMatch) {
+    config.body = {
+      type: "raw",
+      content: bodyMatch[1],
+      formData: [],
+    };
+  }
+
+  return config;
 }

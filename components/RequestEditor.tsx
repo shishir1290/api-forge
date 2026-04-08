@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { useRequestExecutor } from "@/hooks/useRequestExecutor";
 import { getInheritedAuth, getInheritedVariables } from "@/lib/hierarchy-utils";
@@ -22,6 +22,8 @@ export default function RequestEditor({ tabId }: Props) {
     "params" | "headers" | "body" | "auth" | "scripts"
   >("params");
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [topHeight, setTopHeight] = useState(350);
+  const [isVerticalDragging, setIsVerticalDragging] = useState(false);
 
   const {
     requests,
@@ -54,6 +56,37 @@ export default function RequestEditor({ tabId }: Props) {
 
   const update = (updates: Partial<RequestConfig>) =>
     updateRequest(tabId, updates);
+
+  const startVerticalDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsVerticalDragging(true);
+  };
+
+  useEffect(() => {
+    if (!isVerticalDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Calculate height based on mouse position
+      // The RequestEditor starts after the sidebar/header, approx 100px down
+      const newHeight = Math.max(
+        100,
+        Math.min(window.innerHeight - 150, e.clientY - 90),
+      );
+      setTopHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      setIsVerticalDragging(false);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isVerticalDragging]);
 
   return (
     <div
@@ -110,9 +143,11 @@ export default function RequestEditor({ tabId }: Props) {
       {/* TAB CONTENT */}
       <div
         style={{
-          height: "350px",
+          height: `${topHeight}px`,
           borderBottom: "1px solid var(--border)",
           overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {reqTab === "params" && (
@@ -151,6 +186,25 @@ export default function RequestEditor({ tabId }: Props) {
           />
         )}
       </div>
+
+      {/* Resize Handle */}
+      <div
+        onMouseDown={startVerticalDrag}
+        style={{
+          height: 4,
+          cursor: "row-resize",
+          background: isVerticalDragging ? "var(--accent-blue)" : "transparent",
+          zIndex: 10,
+          transition: "background 0.15s",
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.background = "var(--border)")
+        }
+        onMouseLeave={(e) => {
+          if (!isVerticalDragging)
+            e.currentTarget.style.background = "transparent";
+        }}
+      />
 
       {/* RESPONSE SECTION */}
       <ResponseSection response={response} consoleLogs={consoleLogs} />

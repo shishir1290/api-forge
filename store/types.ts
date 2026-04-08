@@ -11,6 +11,7 @@ import type {
   TeamWorkspace,
   TeamRole,
   Invitation,
+  AppNotification,
 } from "@/types";
 
 export interface AppState {
@@ -143,11 +144,13 @@ export interface AppState {
 
   // Invitations & Notifications
   invitations: Invitation[];
+  notifications: AppNotification[];
   fetchInvitations: () => Promise<void>;
   respondToInvitation: (
     id: string,
     action: "ACCEPT" | "REJECT",
   ) => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
   updateWorkspace: (
     updates: Partial<Pick<TeamWorkspace, "name" | "description">>,
   ) => void;

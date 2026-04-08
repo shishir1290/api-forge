@@ -60,6 +60,7 @@ export default function ResponseSection({ response, consoleLogs }: Props) {
           <ResponseViewer
             content={response.body}
             contentType={response.headers["content-type"] || ""}
+            isBinary={response.isBinary}
           />
         )}
         {resTab === "headers" && response && (

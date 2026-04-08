@@ -1,4 +1,5 @@
 "use client";
+import Editor from "@monaco-editor/react";
 
 interface Props {
   preRequestScript: string;
@@ -35,24 +36,35 @@ export default function ScriptsTab({
         >
           PRE-REQUEST SCRIPT
         </div>
-        <textarea
-          value={preRequestScript}
-          onChange={(e) => onChange({ preRequestScript: e.target.value })}
-          placeholder="// This script runs before the request is sent"
+        <div
           style={{
-            width: "100%",
             flex: 1,
             background: "var(--bg-active)",
             border: "1px solid var(--border)",
             borderRadius: 6,
-            padding: "10px",
-            color: "var(--text-primary)",
-            fontSize: "12px",
-            outline: "none",
-            resize: "none",
-            fontFamily: "JetBrains Mono, monospace",
+            overflow: "hidden",
+            height: "100%",
           }}
-        />
+        >
+          <Editor
+            height="100%"
+            language="javascript"
+            theme="vs-dark"
+            value={preRequestScript}
+            onChange={(value) => onChange({ preRequestScript: value || "" })}
+            options={{
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              fontSize: 12,
+              fontFamily: "JetBrains Mono, monospace",
+              automaticLayout: true,
+              autoClosingBrackets: "always",
+              tabSize: 2,
+              wordWrap: "on",
+              lineNumbers: "on",
+            }}
+          />
+        </div>
       </div>
       <div
         style={{
@@ -74,24 +86,35 @@ export default function ScriptsTab({
         >
           POST-REQUEST SCRIPT
         </div>
-        <textarea
-          value={postRequestScript}
-          onChange={(e) => onChange({ postRequestScript: e.target.value })}
-          placeholder="// This script runs after the response is received"
+        <div
           style={{
-            width: "100%",
             flex: 1,
             background: "var(--bg-active)",
             border: "1px solid var(--border)",
             borderRadius: 6,
-            padding: "10px",
-            color: "var(--text-primary)",
-            fontSize: "12px",
-            outline: "none",
-            resize: "none",
-            fontFamily: "JetBrains Mono, monospace",
+            overflow: "hidden",
+            height: "100%",
           }}
-        />
+        >
+          <Editor
+            height="100%"
+            language="javascript"
+            theme="vs-dark"
+            value={postRequestScript}
+            onChange={(value) => onChange({ postRequestScript: value || "" })}
+            options={{
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              fontSize: 12,
+              fontFamily: "JetBrains Mono, monospace",
+              automaticLayout: true,
+              autoClosingBrackets: "always",
+              tabSize: 2,
+              wordWrap: "on",
+              lineNumbers: "on",
+            }}
+          />
+        </div>
       </div>
     </div>
   );

@@ -114,25 +114,36 @@ export function useRequestExecutor(tabId: string) {
         delete headers["Content-Type"];
       }
 
-      log(`Sending ${request.method} ${url}`);
+      log(`Sending ${request.method} ${url} (via proxy)`);
 
-      const res = await fetch(url, {
-        method: request.method,
-        headers,
-        body:
-          request.method !== "GET" && request.method !== "HEAD"
-            ? body
-            : undefined,
+      const res = await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: request.method,
+          url,
+          headers,
+          body:
+            request.method !== "GET" && request.method !== "HEAD"
+              ? body
+              : undefined,
+        }),
       });
 
-      const responseText = await res.text();
+      const resJson = await res.json();
+
+      if (resJson.error) {
+        throw new Error(resJson.error);
+      }
+
       const responseData: ResponseData = {
-        status: res.status,
-        statusText: res.statusText,
-        headers: Object.fromEntries(res.headers.entries()),
-        body: responseText,
-        time: 100, // Approximate
-        size: responseText.length,
+        status: resJson.status,
+        statusText: resJson.statusText,
+        headers: resJson.headers,
+        body: resJson.body,
+        isBinary: resJson.isBinary,
+        time: resJson.time,
+        size: resJson.size,
         requestId: request.id,
       };
 

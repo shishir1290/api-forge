@@ -60,6 +60,7 @@ export interface ResponseData {
   time: number;
   size: number;
   requestId: string;
+  isBinary?: boolean;
 }
 
 // Recursive folder — folders can contain requests AND sub-folders
@@ -147,4 +148,16 @@ export interface Invitation {
   workspace: { id: string; name: string };
   inviter: { id: string; name: string; email: string };
   createdAt: string;
+}
+export interface AppNotification {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  data?: any;
+  read: boolean;
+  status: "PENDING" | "ACCEPTED" | "REJECTED";
+  createdAt: string;
+  updatedAt: string;
 }

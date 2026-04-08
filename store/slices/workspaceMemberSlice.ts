@@ -24,7 +24,7 @@ export const createWorkspaceMemberSlice: StateCreator<
       const BACKEND_URL =
         process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
       const res = await fetch(
-        `${BACKEND_URL}/api/workspaces/${workspace.id}/invitations`,
+        `${BACKEND_URL}/api/workspaces/${workspace.id}/invite`,
         {
           method: "POST",
           headers: {
@@ -35,7 +35,7 @@ export const createWorkspaceMemberSlice: StateCreator<
         },
       );
       if (res.ok) return { success: true };
-      const err = await res.json();
+      const err = await res.json().catch(() => ({ error: "Failed to invite" }));
       return { success: false, error: err.error || "Failed to invite" };
     } catch (e) {
       return { success: false, error: "Network error" };
@@ -49,7 +49,7 @@ export const createWorkspaceMemberSlice: StateCreator<
       const BACKEND_URL =
         process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
       const res = await fetch(
-        `${BACKEND_URL}/api/workspaces/${workspace.id}/members/${memberId}`,
+        `${BACKEND_URL}/api/workspaces/${workspace.id}/members/${memberId}/role`,
         {
           method: "PATCH",
           headers: {

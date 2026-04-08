@@ -5,6 +5,7 @@ import { useAppStore } from "@/store/useAppStore";
 import Sidebar from "@/components/Sidebar";
 import TabBar from "@/components/TabBar";
 import NotificationBell from "@/components/NotificationBell";
+import EnvironmentSelector from "@/components/EnvironmentSelector";
 import RequestEditor from "@/components/RequestEditor";
 import WelcomeScreen from "@/components/WelcomeScreen";
 import { v4 as uuidv4 } from "uuid";
@@ -157,8 +158,14 @@ export default function Home() {
             <TabBar />
           </div>
           <div
-            style={{ paddingRight: 12, display: "flex", alignItems: "center" }}
+            style={{
+              paddingRight: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
           >
+            <EnvironmentSelector />
             <NotificationBell />
           </div>
         </div>

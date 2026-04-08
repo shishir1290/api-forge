@@ -1,7 +1,16 @@
 "use client";
 import { useState, useMemo } from "react";
-import { Search, Plus, FolderPlus } from "lucide-react";
+import {
+  Search,
+  Plus,
+  FolderPlus,
+  ChevronDown,
+  Bell,
+  Terminal,
+} from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useAppStore } from "@/store/useAppStore";
+import { Environment } from "@/types";
 import SidebarTabs from "./SidebarTabs";
 import SidebarProfile from "./SidebarProfile";
 import SidebarTreeView from "./SidebarTreeView";
@@ -9,19 +18,46 @@ import FolderPropertiesModal from "./FolderPropertiesModal";
 import EnvironmentModal from "./EnvironmentModal";
 import ImportModal from "./ImportModal";
 import ExportModal from "./ExportModal";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
+import InviteModal from "./InviteModal";
+import NotificationCenter from "./NotificationCenter";
+import ImportCurlModal from "./ImportCurlModal";
 
 export default function Sidebar() {
   const [activeTab, setActiveTab] = useState<
     "collections" | "history" | "environments" | "team"
   >("collections");
   const [search, setSearch] = useState("");
-  const { collections, workspace, openTab, addCollection } = useAppStore();
+  const {
+    collections,
+    workspace,
+    user,
+    openTab,
+    addCollection,
+    fetchWorkspaces,
+    fetchCollections,
+    fetchInvitations,
+    addEnvironment,
+    notifications,
+  } = useAppStore();
   const [showProperties, setShowProperties] = useState<{
     cid: string;
     fid?: string;
   } | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [showExport, setShowExport] = useState<any>(null);
+  const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
+  const [editingEnv, setEditingEnv] = useState<Environment | null>(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showImportCurl, setShowImportCurl] = useState(false);
+  const swRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchWorkspaces();
+    if (workspace?.id) fetchCollections(workspace.id);
+    fetchInvitations();
+  }, [fetchWorkspaces, workspace?.id, fetchCollections, fetchInvitations]);
 
   const filteredCollections = useMemo(() => {
     if (!search) return collections;
@@ -44,7 +80,72 @@ export default function Sidebar() {
         background: "var(--bg-secondary)",
       }}
     >
-      <SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      <div
+        style={{
+          width: 60,
+          background: "var(--bg-tertiary)",
+          borderRight: "1px solid var(--border)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          padding: "20px 0",
+          gap: 20,
+        }}
+      >
+        <SidebarTabs activeTab={activeTab} onTabChange={setActiveTab} />
+
+        <div style={{ flex: 1 }} />
+
+        {/* <button
+          onClick={() => setShowNotifications(!showNotifications)}
+          style={{
+            width: 42,
+            height: 42,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 10,
+            background: showNotifications ? "rgba(88,166,255,0.15)" : "none",
+            border: "none",
+            cursor: "pointer",
+            color: showNotifications
+              ? "var(--accent-blue)"
+              : "var(--text-muted)",
+            transition: "all 0.2s",
+            position: "relative",
+          }}
+          onMouseEnter={(e) => {
+            if (!showNotifications)
+              e.currentTarget.style.background = "var(--bg-hover)";
+          }}
+          onMouseLeave={(e) => {
+            if (!showNotifications) e.currentTarget.style.background = "none";
+          }}
+          title="Notifications"
+        >
+          <Bell size={20} />
+          {notifications.filter((n) => !n.read).length > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "var(--accent-red)",
+                border: "1.5px solid var(--bg-tertiary)",
+              }}
+            />
+          )}
+        </button> */}
+
+        <div style={{ height: 20 }} />
+      </div>
+
+      {showNotifications && (
+        <NotificationCenter onClose={() => setShowNotifications(false)} />
+      )}
 
       <div
         style={{
@@ -99,6 +200,8 @@ export default function Sidebar() {
             }}
           >
             <div
+              ref={swRef}
+              onClick={() => setShowWorkspaceSwitcher(!showWorkspaceSwitcher)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -108,11 +211,32 @@ export default function Sidebar() {
                 letterSpacing: "0.02em",
                 overflow: "hidden",
                 whiteSpace: "nowrap",
+                cursor: "pointer",
+                padding: "4px 8px",
+                borderRadius: 6,
+                background: showWorkspaceSwitcher ? "var(--bg-active)" : "none",
+                transition: "background 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                if (!showWorkspaceSwitcher)
+                  e.currentTarget.style.background = "var(--bg-hover)";
+              }}
+              onMouseLeave={(e) => {
+                if (!showWorkspaceSwitcher)
+                  e.currentTarget.style.background = "none";
               }}
             >
               <span style={{ color: "var(--text-muted)" }}>
                 {workspace.name}
               </span>
+              <ChevronDown
+                size={12}
+                style={{
+                  color: "var(--text-muted)",
+                  transform: showWorkspaceSwitcher ? "rotate(180deg)" : "none",
+                  transition: "transform 0.2s",
+                }}
+              />
               <span style={{ color: "var(--text-muted)", opacity: 0.5 }}>
                 &gt;
               </span>
@@ -122,7 +246,12 @@ export default function Sidebar() {
             </div>
             <div style={{ display: "flex", gap: 4 }}>
               <button
-                onClick={() => addCollection("New Collection")}
+                onClick={() => {
+                  if (activeTab === "collections")
+                    addCollection("New Collection");
+                  if (activeTab === "environments")
+                    addEnvironment("New Environment");
+                }}
                 style={{
                   background: "none",
                   border: "none",
@@ -130,23 +259,44 @@ export default function Sidebar() {
                   color: "var(--text-muted)",
                   padding: 4,
                 }}
-                title="New collection"
+                title={
+                  activeTab === "environments"
+                    ? "New environment"
+                    : "New collection"
+                }
               >
                 <Plus size={14} />
               </button>
-              <button
-                onClick={() => setShowImport(true)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--text-muted)",
-                  padding: 4,
-                }}
-                title="Import"
-              >
-                <FolderPlus size={14} />
-              </button>
+              {activeTab === "collections" && (
+                <>
+                  <button
+                    onClick={() => setShowImport(true)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "var(--text-muted)",
+                      padding: 4,
+                    }}
+                    title="Import Collection"
+                  >
+                    <FolderPlus size={14} />
+                  </button>
+                  <button
+                    onClick={() => setShowImportCurl(true)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "var(--text-muted)",
+                      padding: 4,
+                    }}
+                    title="Import from cURL"
+                  >
+                    <Terminal size={14} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -157,6 +307,8 @@ export default function Sidebar() {
           openTab={openTab}
           onExport={setShowExport}
           onOpenProperties={(cid, fid) => setShowProperties({ cid, fid })}
+          onEditEnv={setEditingEnv}
+          onInvite={() => setShowInviteModal(true)}
           canEdit={canEdit}
         />
 
@@ -185,6 +337,30 @@ export default function Sidebar() {
         <ExportModal
           collection={showExport}
           onClose={() => setShowExport(null)}
+        />
+      )}
+      {showWorkspaceSwitcher && swRef.current && (
+        <WorkspaceSwitcher
+          anchorRect={swRef.current.getBoundingClientRect()}
+          onClose={() => setShowWorkspaceSwitcher(false)}
+        />
+      )}
+      {editingEnv && (
+        <EnvironmentModal
+          environment={editingEnv}
+          onClose={() => setEditingEnv(null)}
+        />
+      )}
+      {showInviteModal && (
+        <InviteModal onClose={() => setShowInviteModal(false)} />
+      )}
+      {showImportCurl && (
+        <ImportCurlModal
+          onClose={() => setShowImportCurl(false)}
+          onImport={(request) => {
+            openTab(request);
+            setShowImportCurl(false);
+          }}
         />
       )}
     </div>

@@ -1,6 +1,7 @@
-"use client";
-import { Collection, RequestConfig } from "@/types";
+import { Collection, RequestConfig, Environment } from "@/types";
 import CollectionNode from "./CollectionNode";
+import EnvironmentPanel from "./EnvironmentPanel";
+import TeamPanel from "./TeamPanel";
 
 interface Props {
   activeTab: string;
@@ -8,6 +9,8 @@ interface Props {
   openTab: (r: RequestConfig) => void;
   onExport: (c: Collection) => void;
   onOpenProperties: (cid: string, fid?: string) => void;
+  onEditEnv: (env: Environment) => void;
+  onInvite: () => void;
   canEdit: boolean;
 }
 
@@ -17,6 +20,8 @@ export default function SidebarTreeView({
   openTab,
   onExport,
   onOpenProperties,
+  onEditEnv,
+  onInvite,
   canEdit,
 }: Props) {
   return (
@@ -60,30 +65,8 @@ export default function SidebarTreeView({
           History logic goes here...
         </div>
       )}
-      {activeTab === "environments" && (
-        <div
-          style={{
-            padding: 20,
-            textAlign: "center",
-            color: "var(--text-muted)",
-            fontSize: "12px",
-          }}
-        >
-          Environments logic goes here...
-        </div>
-      )}
-      {activeTab === "team" && (
-        <div
-          style={{
-            padding: 20,
-            textAlign: "center",
-            color: "var(--text-muted)",
-            fontSize: "12px",
-          }}
-        >
-          Team logic goes here...
-        </div>
-      )}
+      {activeTab === "environments" && <EnvironmentPanel onEdit={onEditEnv} />}
+      {activeTab === "team" && <TeamPanel onInvite={onInvite} />}
     </div>
   );
 }

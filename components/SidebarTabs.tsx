@@ -17,13 +17,10 @@ export default function SidebarTabs({ activeTab, onTabChange }: Props) {
   return (
     <div
       style={{
-        width: 60,
-        background: "var(--bg-tertiary)",
-        borderRight: "1px solid var(--border)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        paddingTop: 16,
+        paddingTop: 0,
         gap: 12,
       }}
     >
