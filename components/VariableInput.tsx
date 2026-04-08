@@ -180,6 +180,10 @@ export default function VariableInput({
     fontSize: sharedFontSize,
     fontFamily: sharedFontFamily,
     lineHeight: sharedLineHeight,
+    letterSpacing: "normal",
+    textRendering: "optimizeLegibility",
+    WebkitFontSmoothing: "antialiased",
+    MozOsxFontSmoothing: "grayscale",
     boxSizing: "border-box" as const,
   };
 
@@ -210,6 +214,7 @@ export default function VariableInput({
                 : "rgba(255,123,114,0.15)",
               borderRadius: 3,
               padding: "0 2px",
+              margin: "0 -2px",
               fontWeight: 600,
               pointerEvents: "auto",
               cursor: "text",

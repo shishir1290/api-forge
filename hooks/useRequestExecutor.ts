@@ -114,7 +114,73 @@ export function useRequestExecutor(tabId: string) {
         delete headers["Content-Type"];
       }
 
-      log(`Sending ${request.method} ${url} (via proxy)`);
+      const isElectron =
+        typeof window !== "undefined" &&
+        navigator.userAgent.toLowerCase().includes("electron");
+      const startTime = Date.now();
+
+      log(
+        `Sending ${request.method} ${url} (via ${isElectron ? "Direct" : "Proxy"})`,
+      );
+
+      if (isElectron) {
+        // Direct fetch for Electron (bypasses CORS in desktop apps)
+        const fetchOptions: RequestInit = {
+          method: request.method,
+          headers: headers,
+          body:
+            request.method !== "GET" && request.method !== "HEAD"
+              ? body
+              : undefined,
+        };
+
+        const res = await fetch(url, fetchOptions);
+        const endTime = Date.now();
+
+        const responseHeaders: Record<string, string> = {};
+        res.headers.forEach((v, k) => {
+          responseHeaders[k] = v;
+        });
+
+        const contentType = res.headers.get("content-type") || "";
+        const isBinary = /image|pdf|video|audio|octet-stream/.test(contentType);
+
+        let responseBody: string;
+        let size = 0;
+        if (isBinary) {
+          const buffer = await res.arrayBuffer();
+          size = buffer.byteLength;
+          const bytes = new Uint8Array(buffer);
+          let binary = "";
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          responseBody = btoa(binary);
+        } else {
+          responseBody = await res.text();
+          size = new TextEncoder().encode(responseBody).length;
+        }
+
+        const responseData: ResponseData = {
+          status: res.status,
+          statusText: res.statusText,
+          headers: responseHeaders,
+          body: responseBody,
+          isBinary,
+          time: endTime - startTime,
+          size,
+          requestId: request.id,
+        };
+
+        setResponse(tabId, responseData);
+        addToHistory({
+          id: uuidv4(),
+          request: { ...request },
+          response: responseData,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
 
       const res = await fetch("/api/proxy", {
         method: "POST",
@@ -129,6 +195,29 @@ export function useRequestExecutor(tabId: string) {
               : undefined,
         }),
       });
+
+      if (!res.ok) {
+        const text = await res.text();
+        if (text.includes("<!DOCTYPE") || text.includes("<html")) {
+          throw new Error(
+            `Proxy Server Error (${res.status}): ${res.statusText}. Please ensure the dev server is running correctly.`,
+          );
+        }
+        try {
+          const errorJson = JSON.parse(text);
+          throw new Error(errorJson.error || `Proxy Error: ${res.status}`);
+        } catch {
+          throw new Error(`Proxy Error (${res.status}): ${text.slice(0, 100)}`);
+        }
+      }
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(
+          `Unexpected response from proxy: ${text.slice(0, 100)}...`,
+        );
+      }
 
       const resJson = await res.json();
 
