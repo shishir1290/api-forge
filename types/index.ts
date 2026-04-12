@@ -56,6 +56,7 @@ export interface ResponseData {
   status: number;
   statusText: string;
   headers: Record<string, string>;
+  requestHeaders?: Record<string, string>;
   body: string;
   time: number;
   size: number;

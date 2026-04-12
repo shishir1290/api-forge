@@ -7,9 +7,14 @@ import { TeamWorkspace } from "@/types";
 interface Props {
   anchorRect: DOMRect;
   onClose: () => void;
+  onCreateWorkspace: () => void;
 }
 
-export default function WorkspaceSwitcher({ anchorRect, onClose }: Props) {
+export default function WorkspaceSwitcher({
+  anchorRect,
+  onClose,
+  onCreateWorkspace,
+}: Props) {
   const {
     workspaces,
     workspace: activeWs,
@@ -31,12 +36,8 @@ export default function WorkspaceSwitcher({ anchorRect, onClose }: Props) {
     onClose();
   };
 
-  const handleAdd = async () => {
-    const name = prompt("Enter workspace name:");
-    if (name) {
-      await addWorkspace(name);
-      onClose();
-    }
+  const handleAdd = () => {
+    onCreateWorkspace();
   };
 
   return (

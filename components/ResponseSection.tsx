@@ -65,11 +65,23 @@ export default function ResponseSection({ response, consoleLogs }: Props) {
         )}
         {resTab === "headers" && response && (
           <div style={{ padding: "16px" }}>
+            <h4
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: "var(--text-muted)",
+                marginBottom: 12,
+                letterSpacing: "0.05em",
+              }}
+            >
+              RESPONSE HEADERS
+            </h4>
             <table
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
                 fontSize: "12px",
+                marginBottom: 24,
               }}
             >
               <tbody>
@@ -101,6 +113,60 @@ export default function ResponseSection({ response, consoleLogs }: Props) {
                 ))}
               </tbody>
             </table>
+
+            {response.requestHeaders && (
+              <>
+                <h4
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    color: "var(--text-muted)",
+                    marginBottom: 12,
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  REQUEST HEADERS
+                </h4>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: "12px",
+                  }}
+                >
+                  <tbody>
+                    {Object.entries(response.requestHeaders).map(([k, v]) => (
+                      <tr
+                        key={k}
+                        style={{
+                          borderBottom: "1px solid var(--border-subtle)",
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: "8px 0",
+                            color: "var(--text-muted)",
+                            width: "30%",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {k}
+                        </td>
+                        <td
+                          style={{
+                            padding: "8px 0",
+                            color: "var(--text-primary)",
+                            fontFamily: "JetBrains Mono, monospace",
+                          }}
+                        >
+                          {v}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
           </div>
         )}
         {resTab === "console" && (

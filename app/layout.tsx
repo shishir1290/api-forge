@@ -16,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body style={{ height: "100vh", overflow: "hidden" }}>
+      <body style={{ height: "100vh", overflow: "hidden", userSelect: "none" }}>
         <AuthGuard>
           <SyncProvider>{children}</SyncProvider>
         </AuthGuard>

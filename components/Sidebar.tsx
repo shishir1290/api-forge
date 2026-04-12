@@ -22,6 +22,7 @@ import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import InviteModal from "./InviteModal";
 import NotificationCenter from "./NotificationCenter";
 import ImportCurlModal from "./ImportCurlModal";
+import CreateWorkspaceModal from "./CreateWorkspaceModal";
 
 export default function Sidebar() {
   const [activeTab, setActiveTab] = useState<
@@ -51,6 +52,7 @@ export default function Sidebar() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showImportCurl, setShowImportCurl] = useState(false);
+  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
   const swRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -343,7 +345,14 @@ export default function Sidebar() {
         <WorkspaceSwitcher
           anchorRect={swRef.current.getBoundingClientRect()}
           onClose={() => setShowWorkspaceSwitcher(false)}
+          onCreateWorkspace={() => {
+            setShowWorkspaceSwitcher(false);
+            setShowCreateWorkspace(true);
+          }}
         />
+      )}
+      {showCreateWorkspace && (
+        <CreateWorkspaceModal onClose={() => setShowCreateWorkspace(false)} />
       )}
       {editingEnv && (
         <EnvironmentModal

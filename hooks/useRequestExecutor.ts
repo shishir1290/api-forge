@@ -122,8 +122,10 @@ export function useRequestExecutor(tabId: string) {
       }
 
       let body: any;
+      const hasBody = request.method !== "GET" && request.method !== "HEAD";
+
       if (request.body.type === "json") {
-        headers["Content-Type"] = "application/json";
+        if (hasBody) headers["Content-Type"] = "application/json";
         body = resolve(request.body.content);
       } else if (request.body.type === "form-data") {
         const fd = new FormData();
@@ -131,7 +133,7 @@ export function useRequestExecutor(tabId: string) {
           (p) => p.enabled && fd.append(p.key, p.value),
         );
         body = fd;
-        delete headers["Content-Type"];
+        // Browser sets Content-Type automatically for FormData
       }
 
       const isElectron =
@@ -150,8 +152,10 @@ export function useRequestExecutor(tabId: string) {
       }
       log(`Headers: ${JSON.stringify(sanitizedHeaders, null, 2)}`);
 
-      if (isElectron) {
-        // Direct fetch for Electron (bypasses CORS in desktop apps)
+      let responseData: ResponseData | null = null;
+      // 1. Attempt Direct Fetch (primary)
+      try {
+        log(`Attempting direct request to ${url}...`);
         const fetchOptions: RequestInit = {
           method: request.method,
           headers: headers,
@@ -177,28 +181,84 @@ export function useRequestExecutor(tabId: string) {
         if (isBinary) {
           const buffer = await res.arrayBuffer();
           size = buffer.byteLength;
-          const bytes = new Uint8Array(buffer);
-          let binary = "";
-          for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
-          responseBody = btoa(binary);
+          responseData = {
+            status: res.status,
+            statusText: res.statusText,
+            headers: responseHeaders,
+            body: btoa(
+              Array.from(new Uint8Array(buffer))
+                .map((b) => String.fromCharCode(b))
+                .join(""),
+            ),
+            isBinary: true,
+            time: endTime - startTime,
+            size,
+            requestId: request.id,
+            requestHeaders: headers,
+          };
         } else {
           responseBody = await res.text();
           size = new TextEncoder().encode(responseBody).length;
+          responseData = {
+            status: res.status,
+            statusText: res.statusText,
+            headers: responseHeaders,
+            body: responseBody,
+            isBinary: false,
+            time: endTime - startTime,
+            size,
+            requestId: request.id,
+            requestHeaders: headers,
+          };
+        }
+        log(`Direct request successful (${res.status})`);
+      } catch (directError: any) {
+        // 2. Fallback to Proxy if Direct Fetch fails (usually due to CORS)
+        if (isElectron) {
+          // In Electron, direct fetch shouldn't fail due to CORS, so this is a real network error
+          throw directError;
         }
 
-        const responseData: ResponseData = {
-          status: res.status,
-          statusText: res.statusText,
-          headers: responseHeaders,
-          body: responseBody,
-          isBinary,
-          time: endTime - startTime,
-          size,
-          requestId: request.id,
-        };
+        log(
+          `Direct request failed (CORS or Network error). Falling back to Proxy...`,
+        );
+        const res = await fetch("/api/proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            method: request.method,
+            url,
+            headers,
+            body:
+              request.method !== "GET" && request.method !== "HEAD"
+                ? body
+                : undefined,
+          }),
+        });
 
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Proxy Error (${res.status}): ${text.slice(0, 100)}`);
+        }
+
+        const resJson = await res.json();
+        if (resJson.error) throw new Error(resJson.error);
+
+        responseData = {
+          status: resJson.status,
+          statusText: resJson.statusText,
+          headers: resJson.headers,
+          body: resJson.body,
+          isBinary: resJson.isBinary,
+          time: resJson.time,
+          size: resJson.size,
+          requestId: request.id,
+          requestHeaders: headers,
+        };
+        log(`Proxy request successful (${resJson.status})`);
+      }
+
+      if (responseData) {
         setResponse(tabId, responseData);
         addToHistory({
           id: uuidv4(),
@@ -206,70 +266,19 @@ export function useRequestExecutor(tabId: string) {
           response: responseData,
           timestamp: new Date().toISOString(),
         });
-        return;
-      }
 
-      const res = await fetch("/api/proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          method: request.method,
-          url,
-          headers,
-          body:
-            request.method !== "GET" && request.method !== "HEAD"
-              ? body
-              : undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        if (text.includes("<!DOCTYPE") || text.includes("<html")) {
-          throw new Error(
-            `Proxy Server Error (${res.status}): ${res.statusText}. Please ensure the dev server is running correctly.`,
-          );
-        }
-        try {
-          const errorJson = JSON.parse(text);
-          throw new Error(errorJson.error || `Proxy Error: ${res.status}`);
-        } catch {
-          throw new Error(`Proxy Error (${res.status}): ${text.slice(0, 100)}`);
+        // 3. Post-request script
+        if (request.postRequestScript) {
+          log("Executing Post-request script...");
+          executeScript(request.postRequestScript, {
+            environments: latestEnvs,
+            activeEnvironmentId: latestActiveId,
+            response: responseData,
+            setEnvironmentVariable,
+            log,
+          });
         }
       }
-
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await res.text();
-        throw new Error(
-          `Unexpected response from proxy: ${text.slice(0, 100)}...`,
-        );
-      }
-
-      const resJson = await res.json();
-
-      if (resJson.error) {
-        throw new Error(resJson.error);
-      }
-
-      const responseData: ResponseData = {
-        status: resJson.status,
-        statusText: resJson.statusText,
-        headers: resJson.headers,
-        body: resJson.body,
-        isBinary: resJson.isBinary,
-        time: resJson.time,
-        size: resJson.size,
-        requestId: request.id,
-      };
-
-      setResponse(tabId, responseData);
-      addToHistory({
-        id: uuidv4(),
-        request: { ...request },
-        response: responseData,
-        timestamp: new Date().toISOString(),
-      });
     } catch (error: any) {
       log(`Error: ${error.message}`);
     } finally {
