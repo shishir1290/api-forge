@@ -92,13 +92,33 @@ export function useRequestExecutor(tabId: string) {
           headers[resolve(h.key)] = resolve(h.value);
         });
 
-      // Apply Auth logic... (Condensed for brevity, in reality should be full implementation)
+      // Apply Auth logic
       if (
         latestEffectiveAuth.type === "bearer" &&
         latestEffectiveAuth.bearerToken
       ) {
-        headers["Authorization"] =
-          `Bearer ${resolve(latestEffectiveAuth.bearerToken)}`;
+        const resolvedToken = resolve(latestEffectiveAuth.bearerToken);
+        headers["Authorization"] = `Bearer ${resolvedToken}`;
+        log(`Applied Bearer Auth (Token: ${resolvedToken.slice(0, 8)}...)`);
+      } else if (latestEffectiveAuth.type === "basic") {
+        const username = resolve(latestEffectiveAuth.basicUsername || "");
+        const password = resolve(latestEffectiveAuth.basicPassword || "");
+        const encoded = btoa(`${username}:${password}`);
+        headers["Authorization"] = `Basic ${encoded}`;
+        log(`Applied Basic Auth (User: ${username})`);
+      } else if (latestEffectiveAuth.type === "api-key") {
+        const key = resolve(latestEffectiveAuth.apiKeyKey || "");
+        const value = resolve(latestEffectiveAuth.apiKeyValue || "");
+        const location = latestEffectiveAuth.apiKeyIn || "header";
+        if (key) {
+          if (location === "header") {
+            headers[key] = value;
+          } else {
+            const separator = url.includes("?") ? "&" : "?";
+            url += `${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+          }
+          log(`Applied API Key Auth (${key} in ${location})`);
+        }
       }
 
       let body: any;
@@ -122,6 +142,13 @@ export function useRequestExecutor(tabId: string) {
       log(
         `Sending ${request.method} ${url} (via ${isElectron ? "Direct" : "Proxy"})`,
       );
+
+      const sanitizedHeaders: Record<string, string> = { ...headers };
+      if (sanitizedHeaders["Authorization"]) {
+        sanitizedHeaders["Authorization"] =
+          sanitizedHeaders["Authorization"].substring(0, 15) + "...";
+      }
+      log(`Headers: ${JSON.stringify(sanitizedHeaders, null, 2)}`);
 
       if (isElectron) {
         // Direct fetch for Electron (bypasses CORS in desktop apps)

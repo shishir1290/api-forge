@@ -71,14 +71,19 @@ export const createCollectionRequestSlice: StateCreator<
     try {
       const BACKEND_URL =
         process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
-      await fetch(`${BACKEND_URL}/api/requests/${requestId}`, {
+      const res = await fetch(`${BACKEND_URL}/api/requests/${requestId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (workspace.id) {
+      if (res.ok && workspace.id) {
         await fetchCollections(workspace.id);
+      } else {
+        const error = await res.json();
+        console.error("Failed to delete request from collection:", error);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Error deleting request from collection:", e);
+    }
   },
 
   updateRequestInCollection: async (collectionId, requestId, updates) => {
@@ -127,14 +132,19 @@ export const createCollectionRequestSlice: StateCreator<
     try {
       const BACKEND_URL =
         process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:9110";
-      await fetch(`${BACKEND_URL}/api/requests/${requestId}`, {
+      const res = await fetch(`${BACKEND_URL}/api/requests/${requestId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (workspace.id) {
+      if (res.ok && workspace.id) {
         await fetchCollections(workspace.id);
+      } else {
+        const error = await res.json();
+        console.error("Failed to delete request from folder:", error);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Error deleting request from folder:", e);
+    }
   },
 
   updateRequestInFolder: async (collectionId, requestId, updates) => {

@@ -69,6 +69,7 @@ export const useAppStore = create<AppState>()(
         workspace: state.workspace,
         collections: state.collections,
         environments: state.environments,
+        activeEnvironmentId: state.activeEnvironmentId,
         history: state.history,
         tabs: state.tabs,
       }),

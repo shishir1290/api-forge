@@ -89,10 +89,15 @@ export const createCollectionSyncSlice: StateCreator<
           ? [globalEnv, ...mappedEnvironments.filter((e) => e.id !== "global")]
           : mappedEnvironments;
 
+        const currentActiveId = get().activeEnvironmentId;
+        const envExists = finalEnvs.some((e) => e.id === currentActiveId);
+
         set({
           collections: mappedCollections,
           environments: finalEnvs,
-          activeEnvironmentId: finalEnvs[0]?.id || null,
+          activeEnvironmentId: envExists
+            ? currentActiveId
+            : finalEnvs[0]?.id || null,
         });
       }
     } catch (e) {}

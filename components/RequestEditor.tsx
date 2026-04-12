@@ -11,6 +11,7 @@ import AuthTab from "./AuthTab";
 import ScriptsTab from "./ScriptsTab";
 import ResponseSection from "./ResponseSection";
 import SaveModal from "./SaveModal";
+import { parseQueryParams, buildUrlWithParams } from "@/lib/url-utils";
 import { RequestConfig } from "@/types";
 
 interface Props {
@@ -54,8 +55,19 @@ export default function RequestEditor({ tabId }: Props) {
 
   if (!request) return null;
 
-  const update = (updates: Partial<RequestConfig>) =>
-    updateRequest(tabId, updates);
+  const update = (updates: Partial<RequestConfig>) => {
+    let finalUpdates = { ...updates };
+
+    if (updates.url !== undefined) {
+      // Sync URL change to Params
+      finalUpdates.params = parseQueryParams(updates.url, request.params);
+    } else if (updates.params !== undefined) {
+      // Sync Params change to URL
+      finalUpdates.url = buildUrlWithParams(request.url, updates.params);
+    }
+
+    updateRequest(tabId, finalUpdates);
+  };
 
   const startVerticalDrag = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -87,6 +99,25 @@ export default function RequestEditor({ tabId }: Props) {
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isVerticalDragging]);
+
+  // Keyboard shortcut for saving (Ctrl+S / Cmd+S)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        // Only trigger if this editor is for the active tab
+        const activeId = useAppStore.getState().activeTabId;
+        if (activeId !== tabId) return;
+
+        e.preventDefault();
+        saveRequestById(tabId).then(
+          (saved) => !saved && setShowSaveModal(true),
+        );
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [tabId, saveRequestById]);
 
   return (
     <div
