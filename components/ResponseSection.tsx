@@ -55,7 +55,7 @@ export default function ResponseSection({ response, consoleLogs }: Props) {
         ))}
       </div>
 
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div className="selectable" style={{ flex: 1, overflow: "auto" }}>
         {resTab === "body" && response && (
           <ResponseViewer
             content={response.body}

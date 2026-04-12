@@ -198,6 +198,7 @@ export default function ResponseViewer({
       </div>
 
       <div
+        className="selectable"
         style={{
           flex: 1,
           overflow: "auto",

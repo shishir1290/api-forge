@@ -69,6 +69,7 @@ export default function BodyTab({ body, onChange }: Props) {
       <div style={{ flex: 1, overflow: "auto", padding: "12px 16px" }}>
         {body.type === "json" || body.type === "raw" ? (
           <div
+            className="selectable"
             style={{
               position: "relative",
               height: "100%",

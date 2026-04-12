@@ -78,6 +78,13 @@ body {
   font-family: "Inter", sans-serif;
   font-size: 13px;
   overflow: hidden;
+  user-select: none;
+}
+
+body input,
+body textarea,
+.selectable {
+  user-select: text;
 }
 
 ::-webkit-scrollbar {
